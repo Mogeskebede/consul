@@ -1,3 +1,19 @@
+- name: Debug secret_list
+  debug:
+    var: secret_list
+
+- name: Generate secret arguments
+  set_fact:
+    secret_args: "{{ secret_list.split() | map('regex_replace', '^(.*?):\\s*(.*)', '--from-literal=\\1=\\2') | map('regex_replace', '^\\s+|\\s+$', '') | join(' ') }}"
+  when: secret_list is defined and secret_list | length > 0
+
+- name: Create secret
+  shell: "{{ oc_cmd }} create secret generic {{ os_app }}.{{ Env }}-secret.properties {{ secret_args }}"
+  when: secret_args is defined
+
+
+
+
 <h1>
   <img src="./website/public/img/logo.svg" align="left" height="46px" alt="Consul logo"/>
   <span>Consul</span>
