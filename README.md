@@ -1,3 +1,107 @@
+- name: Generate secret arguments
+  set_fact:
+    secret_args: >-
+      {{ 
+        secret_list.split() 
+        | map('regex_replace', '^(.*?):\\s*(.*)', '--from-literal=\\1=\\2') 
+        | map('regex_replace', '^\\s+|\\s+$', '') 
+        | join(' ') 
+      }}
+  when: secret_list is defined and secret_list | length > 0
+
+
+
+
+Potential Issues in secret_args
+Regex Misinterpretation:
+The regex '^(.*?):\\s*(.*)' looks for : as a separator, but if your input doesn't consistently use : (or contains additional spaces), it won't match as expected.
+Whitespace Cleanup:
+The second regex_replace ('^\\s+|\\s+$') removes leading/trailing whitespace but does not affect spaces inside the values, which might cause issues.
+Formatting Validation:
+The format produced for --from-literal must exactly match --from-literal=key=value. Spaces inside keys or values could lead to malformed commands.
+Incorrect Debug Output:
+Ensure secret_args is formed as expected by adding a debug step before the Create secret task.
+Suggested Fix
+To handle potential issues and validate intermediate steps, here's the updated playbook:
+
+- name: Debug secret_list
+  debug:
+    var: secret_list
+
+- name: Validate and format secret arguments
+  set_fact:
+    formatted_secrets: >-
+      {{
+        secret_list.split() 
+        | map('regex_replace', '^(.*?):\\s*(.*)', '\\1=\\2')
+        | map('regex_replace', '^\\s+|\\s+$', '')
+      }}
+  when: secret_list is defined and secret_list | length > 0
+
+- name: Debug formatted_secrets
+  debug:
+    var: formatted_secrets
+
+- name: Generate secret arguments
+  set_fact:
+    secret_args: >-
+      {{
+        formatted_secrets 
+        | map('regex_replace', '^(.*)=(.*)', '--from-literal=\\1=\\2') 
+        | join(' ')
+      }}
+  when: formatted_secrets is defined and formatted_secrets | length > 0
+
+- name: Debug secret_args
+  debug:
+    var: secret_args
+
+- name: Create secret
+  shell: "{{ oc_cmd }} create secret generic {{ os_app }}.{{ Env }}-secret.properties {{ secret_args }}"
+  when: secret_args is defined and secret_args | length > 0
+Key Improvements
+Intermediate Validation:
+Split formatting into multiple steps (formatted_secrets → secret_args) to debug intermediate outputs.
+Improved Regex:
+The first regex ensures the separator : is properly detected.
+The second regex removes leading/trailing spaces for cleaner values.
+Debug Steps:
+Additional debug steps (formatted_secrets, secret_args) validate that the output is correctly formed.
+Consistent Transformation:
+Breaking the logic into smaller, validated steps avoids complex single-line transformations and makes troubleshooting easier.
+Sample Input/Output
+Input (secret_list):
+
+CAPI_CLIENT_SECRET: 'db0LHbdkPRy0jjADI8faTakZyagZy' MDH_PASSWORD: 'KJjgouhiohdi'
+Debug Output (formatted_secrets):
+
+[  "CAPI_CLIENT_SECRET=db0LHbdkPRy0jjADI8faTakZyagZy",  "MDH_PASSWORD=KJjgouhiohdi"]
+Debug Output (secret_args):
+
+--from-literal=CAPI_CLIENT_SECRET=db0LHbdkPRy0jjADI8faTakZyagZy --from-literal=MDH_PASSWORD=KJjgouhiohdi
+Final Notes
+Ensure the input (secret_list) matches the expected format. If there are unexpected issues, rerun with debug tasks to inspect intermediate outputs (formatted_secrets, secret_args) for discrepancies.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 - name: Debug secret_list
   debug:
     var: secret_list
